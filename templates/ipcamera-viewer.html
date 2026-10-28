@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Gateway - Integrated Control Center</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+.toggle-checkbox:checked { right: 0; border-color: #10B981; }
+.toggle-checkbox:checked + .toggle-label { background-color: #10B981; }
+.log-uplink { border-left: 3px solid #10B981; }
+.log-downlink { border-left: 3px solid #3B82F6; }
+.log-alarm { border-left: 3px solid #EF4444; }
+</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+<!-- Header -->
+
+<div class="grid grid-cols-12 gap-4 p-4">
+  <!-- Right: Camera + Log -->
+  <div class="col-span-12 lg:col-span-4 space-y-4">
+    <!-- Camera Monitoring -->
+    <div class="bg-gray-800 rounded-lg p-4">
+      <h2 class="font-bold mb-3"><i class="fas fa-video text-red-400"></i> Home Camera Monitoring</h2>
+      <div class="grid grid-cols-1 gap-3">
+        <div class="bg-black rounded relative overflow-hidden">
+          <div class="aspect-video bg-gray-900 flex items-center justify-center">
+            <i class="fas fa-camera text-4xl text-gray-600"></i>
+            <img src="/api/camera/Camera1/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera1 live">
+            <div class="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded flex items-center gap-1"><span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>LIVE</div>
+            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Camera1 - 1080P</div>
+            <div class="absolute bottom-2 left-2 text-xs bg-black/70 px-2 py-1 rounded">Motion: <span id="cam1Motion" class="text-yellow-400">No</span></div>
+          </div>
+          <div class="p-2 flex gap-2">
+            <button onclick="cameraAction('Camera1','SNAPSHOT')" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"><i class="fas fa-camera"></i> Snapshot</button>
+            <button onclick="cameraAction('Camera1','START_RECORD')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs"><i class="fas fa-record-vinyl"></i> REC</button>
+            <button onclick="cameraAction('Camera1','MOTION_ON')" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-xs">Motion ON</button>
+          </div>
+        </div>
+        <div class="bg-black rounded relative overflow-hidden">
+          <div class="aspect-video bg-gray-900 flex items-center justify-center">
+            <img src="/api/webcam/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera2 live">
+            <i class="fas fa-camera text-4xl text-gray-600"></i>
+            <div class="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded flex items-center gap-1"><span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>LIVE</div>
+            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Camera2 - 1080P</div>
+            <div class="absolute bottom-2 left-2 text-xs bg-black/70 px-2 py-1 rounded">Motion: <span id="cam2Motion" class="text-yellow-400">No</span></div>
+          </div>
+          <div class="p-2 flex gap-2">
+            <button onclick="cameraAction('Camera2','SNAPSHOT')" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"><i class="fas fa-camera"></i> Snapshot</button>
+            <button onclick="cameraAction('Camera2','START_RECORD')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs"><i class="fas fa-record-vinyl"></i> REC</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let devices = {};
+let tempHistory = [];
+const maxHistory = 20;
+
+
+async function cameraAction(camId, action){
+  addLog(`[DOWNLINK] Server -> ${camId}: ${action}`, 'downlink');
+  const res = await fetch(`/api/control/camera/${camId}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action})});
+  const data = await res.json();
+  addLog(`[UPLINK] ${camId} -> Server: ${action} OK ${data.snapshot_url||''}`, 'uplink');
+}
+
+// Init
+
+</script>
+</body>
+</html>
