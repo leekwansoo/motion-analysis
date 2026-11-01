@@ -16,6 +16,13 @@
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
 <!-- Header -->
+<header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
+  <div class="flex gap-4 text-sm">
+    <span class="flex items-center gap-2"><span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>FastAPI:8000</span>
+    <span class="flex items-center gap-2"><span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>FastMCP:Connected</span>
+    <span id="clock" class="text-gray-400"></span>
+  </div>
+</header>
 
 <div class="grid grid-cols-12 gap-4 p-4">
   <!-- Right: Camera + Log -->
@@ -40,7 +47,7 @@
         </div>
         <div class="bg-black rounded relative overflow-hidden">
           <div class="aspect-video bg-gray-900 flex items-center justify-center">
-            <img src="/api/webcam/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera2 live">
+            <img src="/api/camera/Camera2/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera2 live">
             <i class="fas fa-camera text-4xl text-gray-600"></i>
             <div class="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded flex items-center gap-1"><span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>LIVE</div>
             <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Camera2 - 1080P</div>
@@ -57,21 +64,6 @@
   </div>
 </div>
 
-<script>
-let devices = {};
-let tempHistory = [];
-const maxHistory = 20;
 
-
-async function cameraAction(camId, action){
-  addLog(`[DOWNLINK] Server -> ${camId}: ${action}`, 'downlink');
-  const res = await fetch(`/api/control/camera/${camId}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action})});
-  const data = await res.json();
-  addLog(`[UPLINK] ${camId} -> Server: ${action} OK ${data.snapshot_url||''}`, 'uplink');
-}
-
-// Init
-
-</script>
 </body>
 </html>

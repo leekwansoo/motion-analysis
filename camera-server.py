@@ -1,21 +1,23 @@
-import os, cv2, time, datetime, threading
+import os, cv2, time, datetime, threading, random, json, asyncio
 import numpy as np
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi import WebSocket, WebSocketDisconnect
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import WebSocket
 
-from utils.main import camera, _webcam_mjpeg, _mjpeg_frames, CAMERA_RTSP
+from main import camera, _webcam_mjpeg, _mjpeg_frames, CAMERA_RTSP, STATE
 # ====== 설정 ======
 CAMERA_URLS = [
     os.getenv("CAMERA1_RTSP"),
     os.getenv("CAMERA2_RTSP")
 ]
-
+print(CAMERA_URLS)
+STATE = STATE
 CAMERA_RTSP = CAMERA_RTSP
 # WiFi AP 환경이라 끊김 대비
 RECONNECT_DELAY = 2.0
@@ -171,6 +173,59 @@ async def stop_recording():
     recording_state["active"] = False
     return {"status": "stopped"}
 
+@app.get("/api/status")
+async def api_all_status():
+    """[UPLINK] Terminal -> Server : Get all devices status (Both-way demo)"""
+    # Simulate temp drift
+    STATE["Temp1"]["temperature"] = round(22.5 + random.random()*3.5, 1)
+    STATE["Temp1"]["humidity"] = random.randint(52, 68)
+    
+    return {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "direction": "Terminal -> Server (UPLINK)",
+        "devices": {
+            "Temp1": {
+                "temperature_c": STATE["Temp1"]["temperature"],
+                "humidity": STATE["Temp1"]["humidity"],
+                "battery": 87
+            },
+            "Door1": {"status": STATE["Door1"]},
+            "Door2": {"status": STATE["Door2"]},
+
+            "Switch1": {
+                **STATE["Switch1"],
+                "current_power_w": random.randint(800,1500) if STATE["Switch1"]["state"]=="ON" else 0
+            },
+            "Switch2": {
+                **STATE["Switch2"],
+                "current_power_w": random.randint(300,800) if STATE["Switch2"]["state"]=="ON" else 0
+            },
+            "Camera1": {"online": True, "motion": random.choice([True, False]), "recording": True},
+            "Camera2": {"online": True, "motion": random.choice([True, False]), "recording": True},
+        }
+    }
+
+# WebSocket for real-time Both-way push
+@app.websocket("/ws/bothway")
+async def websocket_bothway(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            # Simulate spontaneous UPLINK every 2 sec
+            data = {
+                "type": "UPLINK",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "Temp1": {"temperature": round(22.5 + random.random()*3.5, 1)},
+                "Camera1": {"motion": random.choice([True, False])},
+                "Camera2": {"motion": random.choice([True, False])},
+                "Switch1": {"power_w": random.randint(800,1500) if STATE["Switch1"]["state"]=="ON" else 0}
+            }
+            await websocket.send_text(json.dumps(data))
+            await asyncio.sleep(2)
+    except WebSocketDisconnect:
+        pass
+
+  
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("camera-server:app", host="127.0.0.1", port=8000, reload=True)
