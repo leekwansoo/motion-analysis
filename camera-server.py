@@ -30,48 +30,69 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 class CameraReader:
-    def __init__(self, rtsp_url, cam_id):
-        self.url = rtsp_url
+    def __init__(self, url, cam_id, mode="square"):
+        # mode = "square" or "portrait" or "landscape"
+        self.url = url
         self.cam_id = cam_id
+        self.mode = mode
         self.frame = None
-        self.last_time = 0
         self.lock = threading.Lock()
         self.running = True
-        self.cap = None
-        threading.Thread(target=self._loop, daemon=True).start()
+        threading.Thread(target=self._capture_loop, daemon=True).start()
 
-    def _connect(self):
-        # FFMPEG 옵션으로 지연 줄이기
-        self.cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    def _loop(self):
-        self._connect()
+    def _capture_loop(self):
         while self.running:
-            if not self.cap or not self.cap.isOpened():
-                time.sleep(RECONNECT_DELAY)
-                self._connect()
-                continue
-            
-            ret, frame = self.cap.read()
-            if not ret:
-                print(f"[CAM {self.cam_id}] frame fail, reconnect...")
-                self.cap.release()
-                time.sleep(RECONNECT_DELAY)
-                self._connect()
-                continue
+            print(f"[CONNECT] {self.cam_id} -> {self.url}")
+            cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-            # 720p 정도로 리사이즈해서 부하 줄이기 (원본 유지하고 싶으면 제거)
-            frame = cv2.resize(frame, (640, 360))
-            
-            with self.lock:
-                self.frame = frame
-                self.last_time = time.time()
+            while self.running:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"[LOST] {self.cam_id}, retry...")
+                    cap.release()
+                    time.sleep(2)
+                    break
+                
+                # Convert to desired shape
+                if self.mode == "square":
+                    frame = self.to_square(frame)
+                elif self.mode == "portrait":
+                    frame = self.to_portrait(frame)
+                else: # landscape
+                    frame = cv2.resize(frame, (640, 360))
+
+                with self.lock:
+                    self.frame = frame
+            time.sleep(0.5)
+
+    def to_square(self, frame):
+        # 1920x1080 -> center 1080x1080 -> 640x640
+        h, w = frame.shape[:2]
+        size = min(h, w)
+        x1 = (w - size) // 2
+        y1 = (h - size) // 2
+        square = frame[y1:y1+size, x1:x1+size]
+        return cv2.resize(square, (640, 640))
+
+    def to_portrait(self, frame):
+        # 1920x1080 -> center 608x1080 (9:16) -> 360x640
+        h, w = frame.shape[:2]
+        target_w = int(h * 9 / 16)
+        x1 = (w - target_w) // 2
+        portrait = frame[:, x1:x1+target_w]
+        return cv2.resize(portrait, (360, 640))
 
     def get_frame(self):
         with self.lock:
-            return self.frame.copy() if self.frame is not None else None, self.last_time
+            return self.frame.copy() if self.frame is not None else None
 
+# Usage for your golf setup:
+managers = {
+    "Camera1": CameraReader(CAMERA_URLS[0], "Camera1", mode="square"),
+    "Camera2": CameraReader(CAMERA_URLS[1], "Camera2", mode="square"),
+}
+print(managers)
 # 카메라 리더 2개 생성
 cameras = [CameraReader(url, i) for i, url in enumerate(CAMERA_URLS)]
 
@@ -130,6 +151,27 @@ def mjpeg_generator():
                b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
         time.sleep(0.04)
 
+def mjpeg_gen_combined():
+    while True:
+        f1 = managers["Camera1"].frame # 640x640 square
+        f2 = managers["Camera2"].frame # 640x640 square
+        if f1 is None or f2 is None:
+            time.sleep(0.05)
+            continue
+        # Horizontal combine -> 1280x640
+        # This is perfect square-ish and shows full body for both views
+        combined = cv2.hconcat([f1, f2]) 
+        # Add labels for golf
+        cv2.putText(combined, "FRONT", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
+        cv2.putText(combined, "SIDE DTL", (660, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
+        _, jpeg = cv2.imencode('.jpg', combined, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n'
+        time.sleep(0.04)
+
+@app.get("/api/combined/stream")
+def combined_stream():
+    return StreamingResponse(mjpeg_gen_combined(), media_type="multipart/x-mixed-replace; boundary=frame")  
+         
 @app.get("/ipcamera", response_class=HTMLResponse)
 async def root(request: Request):
     """Main dashboard - Integrated Control Center"""

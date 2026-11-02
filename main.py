@@ -23,15 +23,10 @@ BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 
 STATE = {
-    "Temp1": {"temperature": 0, "humidity": 0},
-    "Door1": "CLOSED",
-    "Door2": "CLOSED",
     "Camera1": {"online": True, "motion": False},
+    "Camera2": {"online": True, "motion": False},
     "Webcam1": {"online": True, "motion": False},
-    "Light1": "OFF",
-    "Light2": "OFF",
-    "Switch1": {"state": "OFF", "power_w": 0},
-    "Switch2": {"state": "OFF", "power_w": 0},
+    "Webcam2": {"online": True, "motion": False},
     "H200": {"ip": os.getenv("H200_IP")},
 }
 
@@ -111,6 +106,8 @@ def _webcam_mjpeg():
         frame_bytes = jpeg.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        
+
       
 
 
