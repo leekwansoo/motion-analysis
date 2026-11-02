@@ -122,7 +122,7 @@ def get_synced_split_frame():
         if not ret or f is None:
             f = np.zeros((360, 640, 3), dtype=np.uint8)
             cv2.putText(f, f"CAM {cam.get(cv2.CAP_PROP_POS_FRAMES)} NO SIGNAL", (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
-        frames.append(f)
+        frames.append(cv2.resize(f, (640, 360)))
     
     # 좌우 합치기
     combined = np.hstack(frames)

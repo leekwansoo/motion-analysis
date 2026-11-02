@@ -3,35 +3,24 @@ import numpy as np
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from fastapi import WebSocket, WebSocketDisconnect
 from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv()
 
-from fastapi import WebSocket
-
-from main import camera, _webcam_mjpeg, _mjpeg_frames, CAMERA_RTSP, STATE
+from main import CAMERA_RTSP, STATE
 # ====== 설정 ======
-CAMERA_URLS = [
-    os.getenv("CAMERA1_RTSP"),
-    os.getenv("CAMERA2_RTSP")
-]
-print(CAMERA_URLS)
-STATE = STATE
 CAMERA_RTSP = CAMERA_RTSP
+print(CAMERA_RTSP)
 # WiFi AP 환경이라 끊김 대비
-RECONNECT_DELAY = 2.0
+# RECONNECT_DELAY = 2.0
 OUTPUT_DIR = Path("recordings")
 OUTPUT_DIR.mkdir(exist_ok=True)
-
 
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
-
+       
 class CameraReader:
-    def __init__(self, url, cam_id, mode="square"):
-        # mode = "square" or "portrait" or "landscape"
+    def __init__(self, url, cam_id, mode="square", start_delay=0):
+        self.start_delay = start_delay
         self.url = url
         self.cam_id = cam_id
         self.mode = mode
@@ -41,30 +30,63 @@ class CameraReader:
         threading.Thread(target=self._capture_loop, daemon=True).start()
 
     def _capture_loop(self):
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+        # Stagger startup so cameras don't connect at the same instant
+        time.sleep(self.start_delay)
+        delay = 2
         while self.running:
-            print(f"[CONNECT] {self.cam_id} -> {self.url}")
+            print(f"[CONNECT] {self.cam_id} -> {self.url.split('@')[-1]}")
             cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            if not cap.isOpened():
+                cap.release()
+                print(f"[FAILED OPEN] {self.cam_id} - retry in {delay}s")
+                time.sleep(delay)
+                delay = min(delay * 2, 30)
+                continue
+            delay = 2
 
+            fails = 0
             while self.running:
                 ret, frame = cap.read()
-                if not ret:
-                    print(f"[LOST] {self.cam_id}, retry...")
-                    cap.release()
-                    time.sleep(2)
-                    break
+                if not ret or frame is None:
+                    fails += 1
+                    if fails > 100:  # ~5s without frames: reconnect
+                        print(f"[RECONNECT] {self.cam_id}")
+                        break
+                    time.sleep(0.05)
+                    continue
+                fails = 0
                 
-                # Convert to desired shape
+                # Convert to square for golf full-body
                 if self.mode == "square":
-                    frame = self.to_square(frame)
+                    h, w = frame.shape[:2]
+                    size = min(h, w)
+                    x1 = (w - size)//2
+                    y1 = (h - size)//2
+                    frame = frame[y1:y1+size, x1:x1+size]
+                    frame = cv2.resize(frame, (640, 640))
                 elif self.mode == "portrait":
-                    frame = self.to_portrait(frame)
-                else: # landscape
+                    h, w = frame.shape[:2]
+                    target_w = int(h * 9/16)
+                    x1 = (w - target_w)//2
+                    frame = frame[:, x1:x1+target_w]
+                    frame = cv2.resize(frame, (360, 640))
+                else:
                     frame = cv2.resize(frame, (640, 360))
 
                 with self.lock:
                     self.frame = frame
-            time.sleep(0.5)
+            
+            cap.release()
+
+    def get_jpeg(self):
+        with self.lock:
+            if self.frame is None:
+                return None
+            _, buf = cv2.imencode(".jpg", self.frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            return buf.tobytes()
+
 
     def to_square(self, frame):
         # 1920x1080 -> center 1080x1080 -> 640x640
@@ -86,28 +108,43 @@ class CameraReader:
     def get_frame(self):
         with self.lock:
             return self.frame.copy() if self.frame is not None else None
-
+        
 # Usage for your golf setup:
 managers = {
-    "Camera1": CameraReader(CAMERA_URLS[0], "Camera1", mode="square"),
-    "Camera2": CameraReader(CAMERA_URLS[1], "Camera2", mode="square"),
+    "Camera1": CameraReader(CAMERA_RTSP["Camera1"], "Camera1", mode="square"),
+    "Camera2": CameraReader(CAMERA_RTSP["Camera2"], "Camera2", mode="square", start_delay=3),
 }
 print(managers)
 # 카메라 리더 2개 생성
-cameras = [CameraReader(url, i) for i, url in enumerate(CAMERA_URLS)]
+cameras = list(managers.values())
 
 # 녹화 상태
 recording_state = {"active": False, "writer": None, "lock": threading.Lock()}
 
+def _mjpeg_frames(url: str):
+    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+    try:
+        while cap.isOpened():
+            ok, frame = cap.read()
+            if not ok:
+                break
+            frame = cv2.resize(frame, (640, 360))
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if ok:
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n"
+    finally:
+        cap.release()  
+        
 def get_synced_split_frame():
     # 두 카메라 최신 프레임 가져와서 좌우 분할
     frames = []
     for cam in cameras:
-        f, t = cam.get_frame()
+        f = cam.get_frame()
         if f is None:
             f = np.zeros((360, 640, 3), dtype=np.uint8)
             cv2.putText(f, f"CAM {cam.cam_id} NO SIGNAL", (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
-        frames.append(f)
+        frames.append(cv2.resize(f, (640, 360)))
     
     # 좌우 합치기
     combined = np.hstack(frames)
@@ -141,7 +178,7 @@ def recording_loop():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "ipcamera_index.html")
 
 def mjpeg_generator():
     while True:
@@ -181,13 +218,10 @@ async def root(request: Request):
 async def video_feed():
     return StreamingResponse(mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
 
-
 @app.get("/api/camera/{camera_id}/stream")
 async def api_camera_stream(camera_id: str):
     """[UPLINK] RTSP -> MJPEG stream for browser <img>"""
-
     url = CAMERA_RTSP.get(camera_id)
-    print(url)
     if not url:
         return JSONResponse({"error": f"Set CAMERA1_RTSP/CAMERA2_RTSP env for {camera_id}"}, status_code=404)
     try:
@@ -196,12 +230,6 @@ async def api_camera_stream(camera_id: str):
         return JSONResponse({"error": "opencv-python not installed"}, status_code=500)
     return StreamingResponse(_mjpeg_frames(url), media_type="multipart/x-mixed-replace; boundary=frame")
 
-@app.get("/api/webcam/stream")
-async def api_webcam_stream(webcam: int = 0):
-    """[UPLINK] USB Webcam -> MJPEG stream for browser <img>"""
-    if not camera.isOpened():
-        return JSONResponse({"error": "Webcam not available"}, status_code=404)
-    return StreamingResponse(_webcam_mjpeg(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.post("/start_recording")
 async def start_recording():
@@ -248,26 +276,8 @@ async def api_all_status():
     }
 
 # WebSocket for real-time Both-way push
-@app.websocket("/ws/bothway")
-async def websocket_bothway(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            # Simulate spontaneous UPLINK every 2 sec
-            data = {
-                "type": "UPLINK",
-                "timestamp": datetime.datetime.now().isoformat(),
-                "Temp1": {"temperature": round(22.5 + random.random()*3.5, 1)},
-                "Camera1": {"motion": random.choice([True, False])},
-                "Camera2": {"motion": random.choice([True, False])},
-                "Switch1": {"power_w": random.randint(800,1500) if STATE["Switch1"]["state"]=="ON" else 0}
-            }
-            await websocket.send_text(json.dumps(data))
-            await asyncio.sleep(2)
-    except WebSocketDisconnect:
-        pass
 
   
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("camera-server:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("camera-server:app", host="127.0.0.1", port=8000)

@@ -18,7 +18,6 @@ CAMERA_RTSP = {
 from pathlib import Path
 from utils.usb_device import list_usb_devices
 
-
 BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -88,7 +87,8 @@ def _mjpeg_frames(url: str):
     finally:
         cap.release()
 
-        
+
+
 def _webcam_mjpeg():
     """Generator for MJPEG frames from USB webcam"""
     failures = 0
