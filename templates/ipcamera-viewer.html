@@ -34,9 +34,9 @@
         <div class="bg-black rounded relative overflow-hidden">
           <div class="aspect-video bg-gray-900 flex items-center justify-center">
             <i class="fas fa-camera text-4xl text-gray-600"></i>
-            <img src="/api/camera/Camera1/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera1 live">
+            <img src="/api/webcam/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera1 live">
             <div class="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded flex items-center gap-1"><span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>LIVE</div>
-            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Camera1 - 1080P</div>
+            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Webcam1 - 740P</div>
             <div class="absolute bottom-2 left-2 text-xs bg-black/70 px-2 py-1 rounded">Motion: <span id="cam1Motion" class="text-yellow-400">No</span></div>
           </div>
           <div class="p-2 flex gap-2">
@@ -50,12 +50,13 @@
             <img src="/api/camera/Camera2/stream" onerror="this.style.display='none'" class="absolute inset-0 w-full h-full object-contain" alt="Camera2 live">
             <i class="fas fa-camera text-4xl text-gray-600"></i>
             <div class="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded flex items-center gap-1"><span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>LIVE</div>
-            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Camera2 - 1080P</div>
+            <div class="absolute top-2 right-2 bg-black/70 text-xs px-2 py-1 rounded">Webcam2 - 740P</div>
             <div class="absolute bottom-2 left-2 text-xs bg-black/70 px-2 py-1 rounded">Motion: <span id="cam2Motion" class="text-yellow-400">No</span></div>
           </div>
           <div class="p-2 flex gap-2">
-            <button onclick="cameraAction('Camera2','SNAPSHOT')" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"><i class="fas fa-camera"></i> Snapshot</button>
-            <button onclick="cameraAction('Camera2','START_RECORD')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs"><i class="fas fa-record-vinyl"></i> REC</button>
+            <button onclick="cameraAction('Webcam2','SNAPSHOT')" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"><i class="fas fa-camera"></i> Snapshot</button>
+            <button onclick="cameraAction('Webcam2','START_RECORD')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs"><i class="fas fa-record-vinyl"></i> REC</button>
+            <button onclick="cameraAction('Webcam2','MOTION_ON')" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-xs">Motion ON</button>
           </div>
         </div>
       </div>
