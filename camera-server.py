@@ -97,13 +97,22 @@ class CameraReader:
         square = frame[y1:y1+size, x1:x1+size]
         return cv2.resize(square, (640, 640))
 
-    def to_portrait(self, frame):
-        # 1920x1080 -> center 608x1080 (9:16) -> 360x640
-        h, w = frame.shape[:2]
-        target_w = int(h * 9 / 16)
-        x1 = (w - target_w) // 2
-        portrait = frame[:, x1:x1+target_w]
-        return cv2.resize(portrait, (360, 640))
+    def to_portrait(self, frame, width_factor=1.0):
+        # width_factor = 1.0 -> 360x640 (좁음)
+        # width_factor = 1.5 -> 540x640 (이전)
+        # width_factor = 1.75 -> 630x640 (추천 - 와이드하면서 비율 정상)
+        # width_factor = 2.0 -> 720x640 (더 와이드)
+        h, w = frame.shape[:2] # 1080, 1920
+        base_w = int(h * 9 / 16) # 607px가 기본 portrait 너비
+        target_w = int(base_w * width_factor)
+        # 원본 1920보다 넓게 잘라지지 않게 제한
+        target_w = min(target_w, w - 20)
+        x1 = (w - target_w)//2
+        cropped = frame[:, x1:x1+target_w]
+        # 비율 유지해서 리사이즈 - 찌그러짐 없음
+        # target_w:1080 = out_w:640  비율 그대로
+        out_w = int(target_w * 640 / h)
+        return cv2.resize(cropped, (out_w, 640))
 
     def get_frame(self):
         with self.lock:
@@ -114,6 +123,20 @@ managers = {
     "Camera1": CameraReader(CAMERA_RTSP["Camera1"], "Camera1", mode="square"),
     "Camera2": CameraReader(CAMERA_RTSP["Camera2"], "Camera2", mode="square", start_delay=3),
 }
+
+
+# get_combined에서:
+def get_combined_portrait():
+    # 각 카메라에서 50% 더 넓게
+    # 간단하게는 CameraReader 안에서 width_factor를 1.75로 고정:
+    f1 = managers["Camera1"].frame # 이제 630x640
+    f2 = managers["Camera2"].frame # 630x640
+    if f1 is None or f2 is None:
+        return None
+    # 630+630 = 1260x640 = 16:9 와이드 모니터에 꽉 차면서 사람 비율 정상
+    combined = cv2.hconcat([f1, f2])
+    return combined
+
 print(managers)
 # 카메라 리더 2개 생성
 cameras = list(managers.values())
@@ -157,21 +180,21 @@ def get_synced_split_frame():
 
 def recording_loop():
     print("Recording started")
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     filepath = OUTPUT_DIR / f"dual_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
     writer = None
 
     while recording_state["active"]:
-        combined = get_synced_split_frame()
+        combined = get_combined_portrait() # <-- same function
+        if combined is None: 
+            time.sleep(0.05)
+            continue
         if writer is None:
-            h, w = combined.shape[:2]
+            h, w = combined.shape[:2] # 640, 1080
             writer = cv2.VideoWriter(str(filepath), fourcc, 20.0, (w, h))
-            with recording_state["lock"]:
-                recording_state["writer"] = writer
-        
         writer.write(combined)
-        time.sleep(0.05) # 20fps 동기화
-
+        time.sleep(0.05)
+        
     if writer:
         writer.release()
         print(f"Saved: {filepath}")
@@ -190,14 +213,13 @@ def mjpeg_generator():
 
 def mjpeg_gen_combined():
     while True:
-        f1 = managers["Camera1"].frame # 640x640 square
-        f2 = managers["Camera2"].frame # 640x640 square
-        if f1 is None or f2 is None:
+        combined = get_combined_portrait()
+        if combined is None:
             time.sleep(0.05)
             continue
         # Horizontal combine -> 1280x640
         # This is perfect square-ish and shows full body for both views
-        combined = cv2.hconcat([f1, f2]) 
+        # combined = cv2.hconcat([f1, f2]) replaced by get_combined_portrait()
         # Add labels for golf
         cv2.putText(combined, "FRONT", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
         cv2.putText(combined, "SIDE DTL", (660, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)

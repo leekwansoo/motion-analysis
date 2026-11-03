@@ -2,21 +2,24 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Tapo Dual Viewer</title>
+<title>Web Camera Dual - Sync View</title>
 <style>
- body { background:#111; color:#fff; font-family:sans-serif; text-align:center; }
- img { width:95%; max-width:1280px; border:2px solid #333; border-radius:12px; }
+ body { background:#111; color:#fff; font-family:sans-serif; text-align:center; margin:0; padding:20px; }
+ .video-wrap { width:95%; max-width:1260px; margin:0 auto; background:#000; border-radius:12px; overflow:hidden; aspect-ratio: 1260/640; }
+ .video-wrap img { width:100%; height:100%; object-fit: contain; display:block; }
  button { padding:12px 24px; margin:10px; font-size:16px; border-radius:8px; cursor:pointer; }
  .rec { background:#e00; color:#fff; }
 </style>
 </head>
 <body>
-<h2>Tapo TC71 Dual - Sync View</h2>
-<img src="/video_feed" />
+<h2>Web Camera Dual - Sync View (Portrait Wide 16:9)</h2>
+<div class="video-wrap">
+  <img src="/video_feed" />
+</div>
 <div>
   <button class="rec" onclick="fetch('/start_recording',{method:'POST'}).then(()=>alert('녹화 시작'))">● 녹화 시작</button>
   <button onclick="fetch('/stop_recording',{method:'POST'}).then(()=>alert('녹화 종료'))">■ 녹화 종료</button>
 </div>
-<p>왼쪽: CAM0 (101) / 오른쪽: CAM1 (102) - 20fps 동기화 저장</p>
+<p>왼쪽: WEBCAM1 / 오른쪽: WEBCAM2 - 1260x640 Portrait Wide - 비율 정상</p>
 </body>
 </html>
