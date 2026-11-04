@@ -35,7 +35,7 @@ class CameraReader:
         time.sleep(self.start_delay)
         delay = 2
         while self.running:
-            print(f"[CONNECT] {self.cam_id} -> {self.url.split('@')[-1]}")
+            print(f"[CONNECT] {self.cam_id} -> {self.url}")
             cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
             
             if not cap.isOpened():
