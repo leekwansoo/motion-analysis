@@ -1,25 +1,32 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Web Camera Dual - Sync View</title>
-<style>
- body { background:#111; color:#fff; font-family:sans-serif; text-align:center; margin:0; padding:20px; }
- .video-wrap { width:95%; max-width:1260px; margin:0 auto; background:#000; border-radius:12px; overflow:hidden; aspect-ratio: 1260/640; }
- .video-wrap img { width:100%; height:100%; object-fit: contain; display:block; }
- button { padding:12px 24px; margin:10px; font-size:16px; border-radius:8px; cursor:pointer; }
- .rec { background:#e00; color:#fff; }
-</style>
-</head>
-<body>
-<h2>Web Camera Dual - Sync View (Portrait Wide 16:9)</h2>
-<div class="video-wrap">
-  <img src="/video_feed" />
-</div>
-<div>
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dual Phone Viewer</title>
+  <style>
+  body{background:#111;color:#fff;font-family:sans-serif;text-align:center;margin:0;padding:10px}
+  #view{width:720px;max-width:95%;margin:10px auto;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:720/480}
+  #view img{width:100%;height:100%;object-fit:contain}
+  button{padding:12px 20px;margin:8px;font-size:16px;border-radius:8px;cursor:pointer}
+  .rec{background:#e00;color:#fff}
+  </style></head><body>
+  <h2>Dual Phone - 720x480 Portrait Combined</h2>
+  <div id="view"><img id="img" /></div>
+  <div>
   <button class="rec" onclick="fetch('/start_recording',{method:'POST'}).then(()=>alert('녹화 시작'))">● 녹화 시작</button>
   <button onclick="fetch('/stop_recording',{method:'POST'}).then(()=>alert('녹화 종료'))">■ 녹화 종료</button>
-</div>
-<p>왼쪽: WEBCAM1 / 오른쪽: WEBCAM2 - 1260x640 Portrait Wide - 비율 정상</p>
-</body>
-</html>
+  </div>
+  <p>TAB1: http://PC_IP:8080/phone1 (정면) / TAB2: http://PC_IP:8080/phone2 (측면)</p>
+  <p id="stat">연결 대기중</p>
+  <script>
+  const img=document.getElementById('img'), stat=document.getElementById('stat');
+  function connect(){
+    const proto=location.protocol==='https:'?'wss://':'ws://';
+    const ws=new WebSocket(proto+location.host+'/ws/viewer');
+    ws.binaryType='arraybuffer';
+    ws.onopen=()=>stat.textContent='✅ 뷰어 연결됨';
+    ws.onclose=()=>{stat.textContent='끊김 - 재연결'; setTimeout(connect,1000)};
+    ws.onmessage=e=>{
+      const blob=new Blob([e.data],{type:'image/jpeg'});
+      img.src=URL.createObjectURL(blob);
+    };
+  }
+  connect();
+  </script>
+  </body></html>

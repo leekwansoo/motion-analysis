@@ -1,0 +1,27 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Phone Viewer - Low Latency</title>
+  <style>body{background:#111;color:#fff;text-align:center;font-family:sans-serif}
+  #view{width:95%;max-width:640px;margin:20px auto;background:#000;border-radius:12px;aspect-ratio:640/360;overflow:hidden}
+  #view img{width:100%;height:100%;object-fit:contain}
+  </style></head><body>
+  <h2>Phone Live - 0.1초 지연</h2>
+  <div id="view"><img id="img" /></div>
+  <p id="stat">연결중...</p>
+  <script>
+  const img=document.getElementById('img'), stat=document.getElementById('stat');
+  let last=Date.now(), count=0;
+  function connect(){
+    const proto = location.protocol==='https:'?'wss://':'ws://';
+    const ws=new WebSocket(proto+location.host+'/ws/viewer');
+    ws.binaryType='arraybuffer';
+    ws.onopen=()=>stat.textContent='✅ 연결됨';
+    ws.onclose=()=>{stat.textContent='끊김 - 재연결'; setTimeout(connect,1000)};
+    ws.onmessage=e=>{
+      const blob=new Blob([e.data],{type:'image/jpeg'});
+      img.src=URL.createObjectURL(blob);
+      count++; 
+      if(Date.now()-last>1000){ stat.textContent=`${count} fps | 지연 <0.2초`; count=0; last=Date.now(); }
+    };
+  }
+  connect();
+  </script>
+  </body></html>

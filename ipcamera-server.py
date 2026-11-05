@@ -302,4 +302,4 @@ async def api_all_status():
   
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("camera-server:app", host="127.0.0.1", port=8000)
+    uvicorn.run("ipcamera-server:app", host="127.0.0.1", port=8000)
